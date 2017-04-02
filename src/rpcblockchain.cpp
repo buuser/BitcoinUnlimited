@@ -301,6 +301,81 @@ UniValue getblockhash(const UniValue& params, bool fHelp)
     return pblockindex->GetBlockHash().GetHex();
 }
 
+
+UniValue getlatestcoinbasetxt(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "getlatestcoinbasetxt limit\n"
+            "\nReturns last n block(s) info and coinbase text.\n"
+            "\nArguments:\n"
+            "1. Number of blocks to list (numeric, required)\n"
+            "\nResult:\n"
+	    "\"blocks\": [\n"
+	    "{\n"
+	    "  \"hash\": (string) The block hash\n"
+	    "  \"height\": (int) The block height,\n"
+	    "  \"version\": (numeric) The block version\n"
+	    "  \"coinbase\": \"UTF8 encoded string\"\n"
+	    "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("getlatestcoinbasetxt", "10")
+            + HelpExampleRpc("getlatestcoinbasetxt", "10")
+        );
+
+    LOCK(cs_main);
+
+    int nLimit = params[0].get_int();
+    if (nLimit < 0 || nLimit > chainActive.Height())
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Block limit greater than chain height");
+
+    uint256 hash(uint256S(chainActive.Tip()->GetBlockHash().GetHex()));
+
+    UniValue result(UniValue::VOBJ);
+    UniValue blockarr(UniValue::VARR);
+
+    for(int i=0;i<nLimit;i++){
+
+    if (mapBlockIndex.count(hash) == 0)
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
+
+	    CBlock block;
+	    CBlockIndex* pblockindex = mapBlockIndex[hash];
+	    CBlockIndex* blockindex = pblockindex;
+
+	    if (fHavePruned && !(pblockindex->nStatus & BLOCK_HAVE_DATA) && pblockindex->nTx > 0)
+		throw JSONRPCError(RPC_INTERNAL_ERROR, "Block not available (pruned data)");
+
+	    if(!ReadBlockFromDisk(block, pblockindex, Params().GetConsensus()))
+		throw JSONRPCError(RPC_INTERNAL_ERROR, "Can't read block from disk");
+
+	    UniValue blockobj(UniValue::VOBJ);
+	    blockobj.push_back(Pair("hash", block.GetHash().GetHex()));
+	    blockobj.push_back(Pair("height", blockindex->nHeight));
+	    blockobj.push_back(Pair("version", block.nVersion));
+
+	    UniValue vin(UniValue::VARR);
+	    BOOST_FOREACH(const CTxIn& txin, block.vtx[0].vin) {
+		UniValue in(UniValue::VOBJ);
+		if (block.vtx[0].IsCoinBase()){
+		    std::string message;
+		    message.resize(txin.scriptSig.size());
+		    std::copy(txin.scriptSig.begin(), txin.scriptSig.end(),
+		    message.begin());
+		    blockobj.push_back(Pair("coinbase", message));
+		}
+	    }
+
+	    blockarr.push_back(blockobj);
+	    hash = uint256S(pblockindex->pprev->GetBlockHash().GetHex());
+
+    }
+
+    result.push_back(Pair("blocks",blockarr));
+    return result;
+}
+
+
 UniValue getblockheader(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() < 1 || params.size() > 2)
