@@ -429,6 +429,52 @@ UniValue getblock(const UniValue& params, bool fHelp)
     return blockToJSON(block, pblockindex);
 }
 
+UniValue getblockcoinbase(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() < 1 || params.size() > 2)
+        throw runtime_error(
+            "getblockcoinbase \"hash\"\n"
+            "\nArguments:\n"
+            "1. \"hash\"          (string, required) The block hash\n"
+            "\nResult:\n"
+            "\"coinbase\"             (string) UTF-8 encoded\n"
+            "\nExamples:\n"
+            + HelpExampleCli("getblockcoinbase", "\"00000000c937983704a73af28acdec37b049d214adbda81d7e2a3dd146f6ed09\"")
+            + HelpExampleRpc("getblockcoinbase", "\"00000000c937983704a73af28acdec37b049d214adbda81d7e2a3dd146f6ed09\"")
+        );
+
+    LOCK(cs_main);
+
+    std::string strHash = params[0].get_str();
+    uint256 hash(uint256S(strHash));
+
+    if (mapBlockIndex.count(hash) == 0)
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
+
+    CBlock block;
+    CBlockIndex* pblockindex = mapBlockIndex[hash];
+
+    if (fHavePruned && !(pblockindex->nStatus & BLOCK_HAVE_DATA) && pblockindex->nTx > 0)
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Block not available (pruned data)");
+
+    if(!ReadBlockFromDisk(block, pblockindex, Params().GetConsensus()))
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Can't read block from disk");
+
+    std::string message;
+
+    UniValue vin(UniValue::VARR);
+    BOOST_FOREACH(const CTxIn& txin, block.vtx[0].vin) {
+	if (block.vtx[0].IsCoinBase()){
+	    message.resize(txin.scriptSig.size());
+	    std::copy(txin.scriptSig.begin(), txin.scriptSig.end(),
+	    message.begin());
+	}
+    }
+
+    return message;
+
+}
+
 UniValue gettxoutsetinfo(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
