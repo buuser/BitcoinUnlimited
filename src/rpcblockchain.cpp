@@ -472,7 +472,6 @@ UniValue getblockcoinbase(const UniValue& params, bool fHelp)
     }
 
     return message;
-
 }
 
 UniValue gettxoutsetinfo(const UniValue& params, bool fHelp)
